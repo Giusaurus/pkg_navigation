@@ -1,0 +1,20 @@
+# DriveRoute.action
+
+geometry_msgs/Point[] waypoints
+
+# Max linear speed for mecanum strafe (m/s). 0.0 -> server default.
+float32 max_speed
+
+---
+
+int8 result_code
+
+int8 RESULT_OK = 0
+int8 RESULT_OBSTACLE_DETECTED = 1
+int8 RESULT_ABORTED = 2
+int8 RESULT_TIMEOUT = 3
+
+---
+
+int32 current_waypoint_index
+geometry_msgs/Point current_position

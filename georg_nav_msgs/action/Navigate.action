@@ -1,0 +1,31 @@
+# Navigate.action
+
+geometry_msgs/Point start
+geometry_msgs/Point goal
+
+# Optional: name of the map YAML to plan against (for example "arena.yaml")
+# Empty string uses its default or last-loaded map.
+string map_name
+
+
+bool simplify_path
+
+---
+
+int8 result_code
+
+int8 RESULT_OK = 0
+int8 RESULT_NO_PATH_FOUND = 1
+int8 RESULT_START_BLOCKED = 2
+int8 RESULT_GOAL_BLOCKED = 3
+int8 RESULT_MAP_NOT_LOADED = 4
+int8 RESULT_ABORTED = 5
+
+
+geometry_msgs/Point[] waypoints
+
+float32 path_length_m
+
+---
+
+int32 cells_expanded
