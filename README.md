@@ -1,5 +1,5 @@
 # pkg_navigation
-This is the Navigation Module for the Pib Robot "Georg". It also includes a Drive Module for test porpuses.
+This is the Navigation Module for the Pib Robot "Georg". It also includes a Drive Module for test purposes.
 It contains two modes for the navigation. The first mode allows a navigation to a specified room (only implemented for later usage).
 The mainly used mode is the navigation to an object, which is specified within the map editor.
 
