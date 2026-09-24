@@ -19,8 +19,8 @@ from . import grid_rasterizer
 from . import astar
 
 
-DEFAULT_MAP_DIR = os.environ.get("GEORG_MAP_DIR", os.path.expanduser("~/georg_maps"))
-DEFAULT_MAP_NAME = os.environ.get("GEORG_DEFAULT_MAP", "arena.yaml")
+DEFAULT_MAP_DIR = os.environ.get("GEORG_MAP_DIR", os.path.expanduser("root/georg_maps"))
+DEFAULT_MAP_NAME = os.environ.get("GEORG_DEFAULT_MAP", "Nav_Test.yaml")
 DEFAULT_NODE_NAME = "navigate_action_server"
 DEFAULT_ACTION_NAME = "navigate"
 
