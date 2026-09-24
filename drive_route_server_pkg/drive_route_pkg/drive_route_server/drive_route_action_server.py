@@ -23,8 +23,8 @@ from .mecanum_controller import (
 )
 
 
-ODOM_TOPIC = "/odom"
-CMD_VEL_TOPIC = "/cmd_vel"
+ODOM_TOPIC = "odom"
+CMD_VEL_TOPIC = "cmd_vel"
 CONTROL_RATE_HZ = 20.0
 ODOM_WAIT_TIMEOUT_S = 5.0
 
