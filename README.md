@@ -14,7 +14,7 @@ source install/setup.bash
 
 ros2 run navigate_server navigate_action_server \
   --node-name nav_server \
-  --action-name /nav/navigate
+  --action-name nav/navigate
 
 ### Optional Parameters:
 
