@@ -6,25 +6,15 @@ The mainly used mode is the navigation to an object, which is specified within t
 ## Navigate_Action_Server
 
 ### Action:     
-/nav/navigate_room_x  (room planning)
+/nav/navigate 
 
-/nav/navigate_object_x  (object planning)
 
-### Navigate_Room Server:
+### Navigate Server:
 source install/setup.bash
 
 ros2 run navigate_server navigate_action_server \
-  --node-name nav_room_server \
-  --action-name /nav/navigate_room_x
-
-
-### Navigate_Object Server:
-source install/setup.bash
-
-ros2 run navigate_server navigate_action_server \
-  --node-name nav_object_server \
-  --action-name /nav/navigate_object_x
-
+  --node-name nav_server \
+  --action-name /nav/navigate
 
 ### Optional Parameters:
 
