@@ -20,8 +20,10 @@ from sensor_msgs.msg import LaserScan
 from .mecanum_controller import (
     Pose2D,
     ControllerGains,
+    Velocity2D,
     compute_velocity_command,
     yaw_from_quaternion,
+    normalize_angle,
 )
 
 
@@ -32,6 +34,12 @@ CONTROL_RATE_HZ = 20.0
 ODOM_WAIT_TIMEOUT_S = 5.0
 
 SCAN_TOPIC = "scan"
+
+MAP_FILE = "/home/giu/georg_maps/Nav_Test_V3.yaml"
+
+# Obstacle Detection Parameters
+
+OBSTACLE_DETECTION_ENABLED = True
 
 OBSTACLE_CONE_HALF_ANGLE_DEG = 30.0
 OBSTACLE_STOP_DISTANCE_M = 0.8
@@ -45,9 +53,18 @@ OBSTACLE_REPORT_HALF_ANGLE_DEG = 90.0
 OBSTACLE_POINT_GRID_M = 0.1
 OBSTACLE_MAX_POINTS = 150
 KNOWN_OBSTACLE_MARGIN_M = 0.35
-OBSTACLE_DETECTION_ENABLED = True
 
-MAP_FILE = "/home/giu/georg_maps/Nav_Test.yaml"
+# Parameters for rotation to next waypoint 
+FACE_TRAVEL_DIRECTION = False
+TURN_CLEARANCE_M = 0.45
+HEADING_LOOKAHEAD_M = 0.8
+HEADING_UPDATE_THRESHOLD_RAD = 0.35
+YAW_DEADBAND_RAD = 0.15
+FRONT_YAW_OFFSET_RAD = math.pi / 2
+TURN_IN_PLACE_START_RAD = 0.8
+TURN_IN_PLACE_END_RAD = 0.3
+
+
 
 def _load_known_polygons(path):
     try:
@@ -179,6 +196,14 @@ class DriveRouteActionServer(Node):
     def _scan_callback(self, msg: LaserScan):
         self._latest_scan = msg
 
+
+    def _min_scan_range(self):
+        scan = self._latest_scan
+        if scan is None:
+            return None
+        valid = [r for r in scan.ranges if scan.range_min <= r <= scan.range_max]
+        return min(valid) if valid else None
+
     def _is_known(self, r, angle):
         
         pose = getattr(self, '_latest_pose', None)
@@ -273,6 +298,9 @@ class DriveRouteActionServer(Node):
 
         waypoints: list[Point] = list(request.waypoints)
         self._known_polys = _load_known_polygons(request.map_name or MAP_FILE)
+        self.get_logger().info(
+            f"Known polygons loaded: {len(self._known_polys)} from '{request.map_name or MAP_FILE}'"
+        )
 
 
         if not self._wait_for_odom(ODOM_WAIT_TIMEOUT_S):
@@ -300,11 +328,14 @@ class DriveRouteActionServer(Node):
         hold_yaw = self._latest_pose.yaw
         start_pose = self._latest_pose
 
+        seg_yaw = hold_yaw
+        turning_in_place = False
 
         period_s = 1.0 / CONTROL_RATE_HZ
         wp_idx = 0
 
         while wp_idx < len(waypoints):
+
             loop_start = time.monotonic()
 
             if goal_handle.is_cancel_requested:
@@ -326,10 +357,39 @@ class DriveRouteActionServer(Node):
             target = waypoints[wp_idx]
             is_final = (wp_idx == len(waypoints) - 1)
 
+            look = target
+            for wp in waypoints[wp_idx:]:
+                look = wp
+                if math.hypot(wp.x - current_pose.x, wp.y - current_pose.y) >= HEADING_LOOKAHEAD_M:
+                    break
+            dx = look.x - current_pose.x
+            dy = look.y - current_pose.y
+            if FACE_TRAVEL_DIRECTION and math.hypot(dx, dy) > 0.3:
+                new_yaw = math.atan2(dy, dx) + FRONT_YAW_OFFSET_RAD
+                if abs(normalize_angle(new_yaw - seg_yaw)) > HEADING_UPDATE_THRESHOLD_RAD:
+                    seg_yaw = new_yaw
 
             vel, reached = compute_velocity_command(
                 current_pose, target.x, target.y, gains, is_final_waypoint=is_final,
-                target_yaw=hold_yaw,
+                target_yaw=seg_yaw,
+            )
+
+            if abs(normalize_angle(seg_yaw - current_pose.yaw)) < YAW_DEADBAND_RAD:
+                vel = Velocity2D(vel.vx, vel.vy, 0.0)
+
+            yaw_err = abs(normalize_angle(seg_yaw - current_pose.yaw))
+            if FACE_TRAVEL_DIRECTION:
+                # Translation abregeln, solange die Ausrichtung noch weit weg ist
+                scale = max(0.3, 1.0 - yaw_err / math.pi)
+                clearance = self._min_scan_range()
+                if clearance is not None and clearance < TURN_CLEARANCE_M:
+                    vel = Velocity2D(vel.vx, vel.vy, 0.0)
+                vel = Velocity2D(vel.vx * scale, vel.vy * scale, vel.omega)
+
+            self.get_logger().info(
+                f"yaw={math.degrees(current_pose.yaw):.0f} seg_yaw={math.degrees(seg_yaw):.0f} "
+                f"omega={vel.omega:.2f} vx={vel.vx:.2f} vy={vel.vy:.2f}",
+                throttle_duration_sec=0.5,
             )
 
             speed = math.hypot(vel.vx, vel.vy)
@@ -389,11 +449,31 @@ class DriveRouteActionServer(Node):
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
+        if FACE_TRAVEL_DIRECTION and request.use_final_yaw:
+            self._rotate_to(request.final_yaw + FRONT_YAW_OFFSET_RAD, gains)
+
         self._publish_stop()
         result.result_code = DriveRoute.Result.RESULT_OK
         goal_handle.succeed()
         self.get_logger().info("DriveRoute succeeded: all waypoints reached")
         return result
+
+
+    def _rotate_to(self, yaw_target, gains, timeout_s=4.0):
+        period_s = 1.0 / CONTROL_RATE_HZ
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout_s:
+            pose = self._latest_pose
+            err = normalize_angle(yaw_target - pose.yaw)
+            if abs(err) < gains.final_heading_tolerance_rad:
+                break
+            omega = max(-gains.max_angular_speed,
+                        min(gains.max_angular_speed, err * gains.k_angular))
+            msg = Twist()
+            msg.angular.z = omega
+            self._cmd_vel_pub.publish(msg)
+            time.sleep(period_s)
+        self._publish_stop()
 
     
     # cmd_vel publishing
