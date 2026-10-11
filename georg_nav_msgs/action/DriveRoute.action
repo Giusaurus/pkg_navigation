@@ -5,6 +5,9 @@ geometry_msgs/Point[] waypoints
 float32 max_speed
 string map_name
 
+bool use_final_yaw
+float32 final_yaw
+
 ---
 
 int8 result_code
