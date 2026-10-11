@@ -46,7 +46,7 @@ class ControllerGains:
     k_angular: float = 2.0
 
     max_linear_speed: float = 0.4   # m/s
-    max_angular_speed: float = 1.5  # rad/s
+    max_angular_speed: float = 0.8  # rad/s
 
     waypoint_tolerance_m: float = 0.1
 
