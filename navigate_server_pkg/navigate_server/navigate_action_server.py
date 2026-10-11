@@ -19,11 +19,11 @@ from . import grid_rasterizer
 from . import astar
 
 
-DEFAULT_MAP_DIR = os.environ.get("GEORG_MAP_DIR", os.path.expanduser("root/georg_maps"))
-DEFAULT_MAP_NAME = os.environ.get("GEORG_DEFAULT_MAP", "Nav_Test.yaml")
+DEFAULT_MAP_DIR = os.environ.get("GEORG_MAP_DIR", os.path.expanduser("~/georg_maps"))
+DEFAULT_MAP_NAME = os.environ.get("GEORG_DEFAULT_MAP", "arena.yaml")
 DEFAULT_NODE_NAME = "navigate_action_server"
 DEFAULT_ACTION_NAME = "navigate"
-
+DEFAULT_EXTRA_OBSTACLE_RADIUS_M = 0.25
 
 class NavigateActionServer(Node):
     #Planning-only Navigate.action server.
@@ -126,6 +126,27 @@ class NavigateActionServer(Node):
             result.result_code = Navigate.Result.RESULT_MAP_NOT_LOADED
             goal_handle.abort()
             return result
+
+        # Extra-Hindernisse gelten nur fuer diesen Planungsaufruf: auf einer
+        # Kopie arbeiten, damit das gecachte Grid sauber bleibt.
+        if len(request.extra_obstacles) > 0:
+            radius = request.obstacle_radius_m
+            if radius <= 0.0:
+                radius = DEFAULT_EXTRA_OBSTACLE_RADIUS_M
+
+            grid = grid_rasterizer.clone_grid(grid)
+            grid_rasterizer.mark_extra_obstacles(
+                grid,
+                [(p.x, p.y) for p in request.extra_obstacles],
+                radius,
+                keep_free=(request.start.x, request.start.y),
+                keep_free_radius_m=0.3,
+            )
+            self.get_logger().info(
+                f"Planning with {len(request.extra_obstacles)} extra obstacle(s), "
+                f"radius={radius:.2f} m"
+            )
+
 
         start_cell = grid.world_to_cell(request.start.x, request.start.y)
         goal_cell = grid.world_to_cell(request.goal.x, request.goal.y)

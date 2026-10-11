@@ -16,7 +16,7 @@ def yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
 
 
 def normalize_angle(angle: float) -> float:
-    """Wraps an angle to (-pi, pi]."""
+
     while angle > math.pi:
         angle -= 2.0 * math.pi
     while angle <= -math.pi:
@@ -51,7 +51,7 @@ class ControllerGains:
     waypoint_tolerance_m: float = 0.1
 
     # smaller waypoint tolerance for last waypoint
-    final_position_tolerance_m: float = 0.03
+    final_position_tolerance_m: float = 0.1
     final_heading_tolerance_rad: float = 0.15
 
 
@@ -61,6 +61,7 @@ def compute_velocity_command(
     target_y: float,
     gains: ControllerGains,
     is_final_waypoint: bool = False,
+    target_yaw: float | None = None,
 ) -> tuple[Velocity2D, bool]:
 
     dx_world = target_x - current.x
@@ -74,13 +75,13 @@ def compute_velocity_command(
 
         return Velocity2D(0.0, 0.0, 0.0), True
 
-    # Desired direction of travel for the robot face
-    if distance > 1e-3:
-        desired_yaw = math.atan2(dy_world, dx_world)
-    else:
-        desired_yaw = current.yaw
+    # #Desired direction of travel for the robot face
+    # if distance > 1e-3:
+    #     desired_yaw = math.atan2(dy_world, dx_world)
+    # else:
+    #     desired_yaw = current.yaw
 
-    heading_error = normalize_angle(desired_yaw - current.yaw)
+    # heading_error = normalize_angle(desired_yaw - current.yaw)
 
 
     cos_yaw = math.cos(current.yaw)
@@ -96,14 +97,13 @@ def compute_velocity_command(
 
     vx = _clamp(dx_robot * linear_scale, gains.max_linear_speed)
     vy = _clamp(dy_robot * linear_scale, gains.max_linear_speed)
-    omega = _clamp(heading_error * gains.k_angular, gains.max_angular_speed)
+    omega = 0.0
+    if target_yaw is not None:
+        omega = _clamp(normalize_angle(target_yaw - current.yaw) * gains.k_angular,
+                       gains.max_angular_speed)
 
     if is_final_waypoint and reached:
-
-        if abs(heading_error) <= gains.final_heading_tolerance_rad:
-            return Velocity2D(0.0, 0.0, 0.0), True
-        else:
-            return Velocity2D(0.0, 0.0, omega), False
+        return Velocity2D(0.0, 0.0, 0.0), True
 
     return Velocity2D(vx, vy, omega), False
 

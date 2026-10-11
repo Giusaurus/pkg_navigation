@@ -14,7 +14,7 @@ from georg_nav_msgs.action import DriveRoute
 
 class DriveRouteClient(Node):
 
-    def __init__(self, action_name: str = "/nav/drive_route"):
+    def __init__(self, action_name: str = "nav/drive_route"):
         super().__init__("drive_route_client")
         self._client = ActionClient(self, DriveRoute, action_name)
         self._action_name = action_name

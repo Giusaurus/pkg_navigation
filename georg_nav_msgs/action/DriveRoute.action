@@ -2,8 +2,8 @@
 
 geometry_msgs/Point[] waypoints
 
-# Max linear speed for mecanum strafe (m/s). 0.0 -> server default.
 float32 max_speed
+string map_name
 
 ---
 
@@ -13,6 +13,9 @@ int8 RESULT_OK = 0
 int8 RESULT_OBSTACLE_DETECTED = 1
 int8 RESULT_ABORTED = 2
 int8 RESULT_TIMEOUT = 3
+
+geometry_msgs/Point blocked_position
+geometry_msgs/Point[] blocked_points
 
 ---
 

@@ -3,12 +3,13 @@
 geometry_msgs/Point start
 geometry_msgs/Point goal
 
-# Optional: name of the map YAML to plan against (for example "arena.yaml")
 # Empty string uses its default or last-loaded map.
 string map_name
 
 
 bool simplify_path
+geometry_msgs/Point[] extra_obstacles
+float32 obstacle_radius_m
 
 ---
 

@@ -12,6 +12,7 @@ import yaml
 
 # in meter
 DEFAULT_CELL_SIZE_M = 0.05
+DEFAULT_INFLATION_M = 0.25
 
 FREE = 0
 OCCUPIED = 1
@@ -50,6 +51,50 @@ class Grid:
             self.cells[row][col] = OCCUPIED
 
 
+def clone_grid(grid: Grid) -> Grid:
+# Kopie fuer einen einzelnen Planungsaufruf. Die Zeilen muessen
+# einzeln kopiert werden, sonst teilen sich beide Grids dieselben Listen.
+    return Grid(
+        width_cells=grid.width_cells,
+        height_cells=grid.height_cells,
+        cell_size_m=grid.cell_size_m,
+        origin_x=grid.origin_x,
+        origin_y=grid.origin_y,
+        cells=[row[:] for row in grid.cells],
+    )    
+
+def mark_extra_obstacles(grid: Grid, points, radius_m: float,
+                         keep_free=None, keep_free_radius_m: float = 0.0) -> None:
+    r_cells = max(1, math.ceil(radius_m / grid.cell_size_m))
+    for x, y in points:
+        c0, r0 = grid.world_to_cell(x, y)
+        for dr in range(-r_cells, r_cells + 1):
+            for dc in range(-r_cells, r_cells + 1):
+                if dc * dc + dr * dr > r_cells * r_cells:
+                    continue
+                if keep_free is not None:
+                    wx, wy = grid.cell_to_world(c0 + dc, r0 + dr)
+                    if math.hypot(wx - keep_free[0], wy - keep_free[1]) < keep_free_radius_m:
+                        continue
+                grid.set_occupied(c0 + dc, r0 + dr)
+
+
+def inflate_grid(grid: Grid, radius_m: float) -> None:
+    # blaeht alle belegten Zellen um den Roboterradius auf
+    r_cells = math.ceil(radius_m / grid.cell_size_m)
+    if r_cells <= 0:
+        return
+    occupied = [
+        (c, r)
+        for r in range(grid.height_cells)
+        for c in range(grid.width_cells)
+        if grid.cells[r][c] == OCCUPIED
+    ]
+    for c0, r0 in occupied:
+        for dr in range(-r_cells, r_cells + 1):
+            for dc in range(-r_cells, r_cells + 1):
+                if dc * dc + dr * dr <= r_cells * r_cells:
+                    grid.set_occupied(c0 + dc, r0 + dr)
 
 # Map extent resolution: boundary polygon -> explicit YAML dims -> bbox
 
@@ -189,6 +234,7 @@ def rasterize(data: dict, cell_size_m: float = DEFAULT_CELL_SIZE_M) -> Grid:
         else:  # for example thin wall
             _rasterize_polygon_edges(grid, points, thickness_cells=1)
 
+    inflate_grid(grid, DEFAULT_INFLATION_M)
 
     return grid
 
