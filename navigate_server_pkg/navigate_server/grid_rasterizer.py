@@ -52,8 +52,7 @@ class Grid:
 
 
 def clone_grid(grid: Grid) -> Grid:
-# Kopie fuer einen einzelnen Planungsaufruf. Die Zeilen muessen
-# einzeln kopiert werden, sonst teilen sich beide Grids dieselben Listen.
+
     return Grid(
         width_cells=grid.width_cells,
         height_cells=grid.height_cells,
@@ -80,7 +79,7 @@ def mark_extra_obstacles(grid: Grid, points, radius_m: float,
 
 
 def inflate_grid(grid: Grid, radius_m: float) -> None:
-    # blaeht alle belegten Zellen um den Roboterradius auf
+
     r_cells = math.ceil(radius_m / grid.cell_size_m)
     if r_cells <= 0:
         return
@@ -96,7 +95,6 @@ def inflate_grid(grid: Grid, radius_m: float) -> None:
                 if dc * dc + dr * dr <= r_cells * r_cells:
                     grid.set_occupied(c0 + dc, r0 + dr)
 
-# Map extent resolution: boundary polygon -> explicit YAML dims -> bbox
 
 
 def _bbox_of_points(points_lists):
@@ -110,13 +108,20 @@ def _bbox_of_points(points_lists):
     return min(xs), min(ys), max(xs), max(ys)
 
 
+def polygon_rings(poly: dict) -> list:
+
+    if poly.get("parts"):
+        return poly["parts"]
+    return [poly["points"]]
+
+
 def _resolve_map_extent(data: dict) -> tuple[float, float, float, float]:
 
     polygons = data.get("polygons", [])
     boundary = next((p for p in polygons if p.get("type") == "boundary"), None)
 
     if boundary is not None:
-        pts = boundary["points"]
+        pts = polygon_rings(boundary)[0]
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         min_x, max_x = min(xs), max(xs)
@@ -128,8 +133,8 @@ def _resolve_map_extent(data: dict) -> tuple[float, float, float, float]:
         origin = map_section.get("origin", [0.0, 0.0])
         return origin[0], origin[1], map_section["width_m"], map_section["height_m"]
 
-    # Fallback: bounding box over every feature in the map.
-    point_lists = [p["points"] for p in polygons]
+    
+    point_lists = [ring for p in polygons for ring in polygon_rings(p)]
     for obj in data.get("objects", {}).values():
         point_lists.append([obj["position"]])
 
@@ -216,23 +221,26 @@ def rasterize(data: dict, cell_size_m: float = DEFAULT_CELL_SIZE_M) -> Grid:
     boundary = next((p for p in polygons if p.get("type") == "boundary"), None)
     if boundary is not None:
         # Outside the boundary is unreachable.
-        boundary_pts = [tuple(p) for p in boundary["points"]]
+        boundary_pts = [tuple(p) for p in polygon_rings(boundary)[0]]
         _mark_outside_boundary_occupied(grid, boundary_pts)
 
     for poly in polygons:
         ptype = poly.get("type", "obstacle")
         if ptype == "boundary":
-            continue  # handled above: the boundary itself is not an obstacle
-        points = [tuple(p) for p in poly["points"]]
-        # Obstacles get filled solid; walls are edges only 
-        if ptype == "obstacle":
-            for row in range(grid.height_cells):
-                for col in range(grid.width_cells):
-                    wx, wy = grid.cell_to_world(col, row)
-                    if _point_in_polygon(wx, wy, points):
-                        grid.set_occupied(col, row)
-        else:  # for example thin wall
-            _rasterize_polygon_edges(grid, points, thickness_cells=1)
+            continue  
+
+
+        for ring in polygon_rings(poly):
+            points = [tuple(p) for p in ring]
+           
+            if ptype == "obstacle":
+                for row in range(grid.height_cells):
+                    for col in range(grid.width_cells):
+                        wx, wy = grid.cell_to_world(col, row)
+                        if _point_in_polygon(wx, wy, points):
+                            grid.set_occupied(col, row)
+            else:  
+                _rasterize_polygon_edges(grid, points, thickness_cells=1)
 
     inflate_grid(grid, DEFAULT_INFLATION_M)
 
@@ -256,3 +264,12 @@ def load_named_object_position(yaml_path: str, name: str) -> tuple[float, float]
         return None
     pos = obj["position"]
     return float(pos[0]), float(pos[1])
+
+def load_map_start(yaml_path: str) -> tuple[float, float] | None:
+    with open(yaml_path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    for obj in data.get("objects", {}).values():
+        if obj.get("type") == "start":
+            pos = obj["position"]
+            return float(pos[0]), float(pos[1])
+    return None

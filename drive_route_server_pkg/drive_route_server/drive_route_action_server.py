@@ -17,6 +17,7 @@ from nav_msgs.msg import Odometry
 from georg_nav_msgs.action import DriveRoute
 from sensor_msgs.msg import LaserScan
 
+
 from .mecanum_controller import (
     Pose2D,
     ControllerGains,
@@ -55,6 +56,7 @@ OBSTACLE_MAX_POINTS = 150
 KNOWN_OBSTACLE_MARGIN_M = 0.35
 
 # Parameters for rotation to next waypoint 
+
 FACE_TRAVEL_DIRECTION = False
 TURN_CLEARANCE_M = 0.45
 HEADING_LOOKAHEAD_M = 0.8
@@ -69,15 +71,31 @@ TURN_IN_PLACE_END_RAD = 0.3
 def _load_known_polygons(path):
     try:
         with open(path) as f:
-            data = yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
     except Exception:
         return []
     polys = []
     for p in data.get('polygons', []):
-        pts = [tuple(pt) for pt in p.get('points', [])]
-        if len(pts) >= 3:
-            polys.append((p.get('type', 'obstacle'), pts))
+        rings = p.get('parts') or [p.get('points', [])]
+        for ring in rings:
+            pts = [tuple(pt) for pt in ring]
+            if len(pts) >= 3:
+                polys.append((p.get('type', 'obstacle'), pts))
     return polys
+
+
+def _load_map_start(path):
+    # Position of Start Object
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return (0.0, 0.0)
+    for obj in data.get('objects', {}).values():
+        if obj.get('type') == 'start':
+            pos = obj['position']
+            return float(pos[0]), float(pos[1])
+    return (0.0, 0.0)
 
 
 def _dist_to_segment(px, py, ax, ay, bx, by):
@@ -129,7 +147,8 @@ class DriveRouteActionServer(Node):
             final_position_tolerance_m=self.get_parameter("final_position_tolerance_m").value,
             final_heading_tolerance_rad=self.get_parameter("final_heading_tolerance_rad").value,
         )
-
+        self._map_offset = _load_map_start(MAP_FILE)
+        self.get_logger().info(f"Odom->Karte Offset: {self._map_offset}")
         self._latest_pose: Pose2D | None = None
 
         odom_qos = QoSProfile(
@@ -180,7 +199,8 @@ class DriveRouteActionServer(Node):
         pos = msg.pose.pose.position
         ori = msg.pose.pose.orientation
         yaw = yaw_from_quaternion(ori.x, ori.y, ori.z, ori.w)
-        self._latest_pose = Pose2D(x=pos.x, y=pos.y, yaw=yaw)
+        self._latest_pose = Pose2D(x=pos.x + self._map_offset[0],
+                                   y=pos.y + self._map_offset[1], yaw=yaw)
 
     def _wait_for_odom(self, timeout_s: float) -> bool:
 
@@ -216,8 +236,7 @@ class DriveRouteActionServer(Node):
     
 
     def _min_range_in_cone(self, direction_rad: float, max_dist: float = OBSTACLE_STOP_DISTANCE_M):
-        # Kleinste Distanz im Fahrkorridor in Fahrtrichtung (Roboterframe).
-        # Rueckgabe: (distanz, winkel) oder None.
+
         scan = self._latest_scan
         if scan is None:
             return None
@@ -240,8 +259,7 @@ class DriveRouteActionServer(Node):
 
 
     def _obstacle_points(self, pose, direction_rad: float):
-        # Alle Scan-Treffer im Kegel um die Fahrtrichtung als Weltpunkte,
-        # auf ein grobes Raster verduennt, naechste zuerst.
+
         scan = self._latest_scan
         if scan is None:
             return []
@@ -379,7 +397,7 @@ class DriveRouteActionServer(Node):
 
             yaw_err = abs(normalize_angle(seg_yaw - current_pose.yaw))
             if FACE_TRAVEL_DIRECTION:
-                # Translation abregeln, solange die Ausrichtung noch weit weg ist
+
                 scale = max(0.3, 1.0 - yaw_err / math.pi)
                 clearance = self._min_scan_range()
                 if clearance is not None and clearance < TURN_CLEARANCE_M:

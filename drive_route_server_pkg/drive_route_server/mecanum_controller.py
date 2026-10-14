@@ -95,8 +95,16 @@ def compute_velocity_command(
     if is_final_waypoint and distance < brake_zone:
         linear_scale *= max(distance / brake_zone, 0.15)
 
-    vx = _clamp(dx_robot * linear_scale, gains.max_linear_speed)
-    vy = _clamp(dy_robot * linear_scale, gains.max_linear_speed)
+    vx = dx_robot * linear_scale
+    vy = dy_robot * linear_scale
+    speed = math.hypot(vx, vy)
+    if gains.max_linear_speed <= 0:
+        vx = vy = 0.0
+    elif speed > gains.max_linear_speed:
+        k = gains.max_linear_speed / speed
+        vx *= k
+        vy *= k
+
     omega = 0.0
     if target_yaw is not None:
         omega = _clamp(normalize_angle(target_yaw - current.yaw) * gains.k_angular,

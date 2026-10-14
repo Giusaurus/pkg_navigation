@@ -60,8 +60,6 @@ class DriveRouteClient(Node):
 
 def _cli_main():
     
-    #python3 -m navigate_server.drive_route_client x1,y1 x2,y2 ...
-    #Example: python3 -m navigate_server.drive_route_client -2.475,3.025 2.425,0.125 4.025,-1.475
     
     if len(sys.argv) < 2:
         print("Usage: drive_route_client <x1,y1> [x2,y2 ...] [--action-name NAME]")

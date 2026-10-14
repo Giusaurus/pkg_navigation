@@ -28,8 +28,7 @@ DEFAULT_EXTRA_OBSTACLE_RADIUS_M = 0.25
 class NavigateActionServer(Node):
     #Planning-only Navigate.action server.
 
-    #    navigate_action_server --ros-args -p action_name:=/nav/navigate_room_x
-    #    navigate_action_server --ros-args -p action_name:=/nav/navigate_object_x
+
     
 
     def __init__(self, node_name: str = DEFAULT_NODE_NAME, action_name: str = DEFAULT_ACTION_NAME):
@@ -127,8 +126,7 @@ class NavigateActionServer(Node):
             goal_handle.abort()
             return result
 
-        # Extra-Hindernisse gelten nur fuer diesen Planungsaufruf: auf einer
-        # Kopie arbeiten, damit das gecachte Grid sauber bleibt.
+
         if len(request.extra_obstacles) > 0:
             radius = request.obstacle_radius_m
             if radius <= 0.0:
@@ -227,8 +225,6 @@ def main(args=None):
 
     raw_args = sys.argv[1:] if args is None else args
 
-    # Usage:
-    # navigate_action_server --node-name nav_room_server --action-name /nav/navigate_room_x
     
     node_name = DEFAULT_NODE_NAME
     action_name = DEFAULT_ACTION_NAME
